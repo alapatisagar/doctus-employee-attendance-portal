@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for Role-Based Access Control
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isFieldUnchanged(field) {
+      return !(field in request.resource.data) || request.resource.data[field] == resource.data[field];
+    }
+
+    function isNonPrivilegedProfileUpdate() {
+      return isFieldUnchanged('role') 
+        && isFieldUnchanged('status') 
+        && isFieldUnchanged('employeeId') 
+        && isFieldUnchanged('accountType') 
+        && isFieldUnchanged('firebaseUid');
+    }
+
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function hasRole(role) {
+      return isAuthenticated() 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && getUserDoc().role == role 
+        && getUserDoc().status == 'ACTIVE';
+    }
+    
+    function isManagementRole() {
+      return hasRole('tl') || hasRole('manager') || hasRole('hr') || hasRole('admin');
+    }
+    
+    function isHrOrAdmin() {
+      return hasRole('hr') || hasRole('admin');
+    }
+
+    // Users Collection (keyed by Firebase Authentication UID: users/{firebaseUid})
+    match /users/{uid} {
+      // Direct single document read (getDoc): Zero recursion, zero sub-queries!
+      allow get: if isAuthenticated() && request.auth.uid == uid;
+      allow list: if isAuthenticated();
+      allow create: if isAuthenticated() && (request.auth.uid == uid || isHrOrAdmin());
+      allow update: if isAuthenticated() && (
+        isHrOrAdmin() || 
+        (request.auth.uid == uid && isNonPrivilegedProfileUpdate())
+      );
+      allow delete: if hasRole('admin');
+    }
+
+    // Employees Collection (keyed by Employee ID: employees/{employeeId})
+    match /employees/{employeeId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isHrOrAdmin();
+    }
+
+    // Attendance Collection
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && (
+        isManagementRole() || 
+        (request.resource.data.attendanceSource == 'LOGIN' 
+         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+         && request.resource.data.employeeId == getUserDoc().employeeId)
+      );
+      allow delete: if isHrOrAdmin();
+    }
+
+    // Leave Requests Collection
+    match /leaveRequests/{requestId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && request.resource.data.employeeId == getUserDoc().employeeId;
+      allow update: if isAuthenticated() && (
+        exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && request.resource.data.employeeId != getUserDoc().employeeId
+        && isManagementRole()
+      );
+    }
+
+    // Audit Logs Collection (Immutable Audit Trail)
+    match /auditLogs/{logId} {
+      allow read: if isHrOrAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Strict immutability
+    }
+
+    // Holidays & Announcements Collections
+    match /holidays/{holidayId} {
+      allow read: if isAuthenticated();
+      allow write: if isHrOrAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow write: if isHrOrAdmin();
+    }
+
+    // System Settings Collection
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isHrOrAdmin();
+    }
+  }
+}
