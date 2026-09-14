@@ -121,25 +121,27 @@ class DatabaseService {
     this.ensurePrimaryAdminProfile();
   }
 
-  private ensurePrimaryAdminProfile(): void {
+  private ensurePrimaryAdminProfile(activeUid?: string): void {
+    const targetUid = activeUid || 'NWcCQo54XhPZUMu9C3AzppIZw802';
     const adminIdx = this.employees.findIndex(e => 
       e.email.toLowerCase() === 'sagarlapati3695@gmail.com' || 
-      e.firebaseUid === 'NWCQo54XhPZUM9C3AZp1Zw802' ||
+      (e.firebaseUid && e.firebaseUid.toLowerCase().includes('nwcqo54')) ||
+      e.employeeId === 'DBS-540' ||
       e.employeeId === 'ADMIN1001'
     );
 
     const now = new Date().toISOString();
     const primaryAdmin: Employee = {
       id: 'emp-admin-1',
-      employeeId: 'ADMIN1001',
+      employeeId: 'DBS-540',
       firstName: 'Sagar',
-      lastName: 'Lapati',
-      name: 'Sagar Lapati',
+      lastName: 'Alapati',
+      name: 'Sagar Alapati',
       email: 'sagarlapati3695@gmail.com',
-      firebaseUid: 'NWCQo54XhPZUM9C3AZp1Zw802',
+      firebaseUid: targetUid,
       phone: '+91 98765 43210',
       joiningDate: '2020-01-15',
-      designation: 'VP of Human Resources & Admin',
+      designation: 'System Administrator',
       departmentId: 'dept-admin',
       departmentName: 'Administration & HR',
       teamId: 'team-exec',
@@ -162,8 +164,19 @@ class DatabaseService {
     }
     setStored(STORAGE_KEYS.EMPLOYEES, this.employees);
 
+    const adminUserDoc: UserAccount = {
+      firebaseUid: targetUid,
+      email: 'sagarlapati3695@gmail.com',
+      role: 'admin',
+      status: 'ACTIVE',
+      accountType: 'MANAGEMENT',
+      employeeId: 'DBS-540',
+      name: 'Sagar Alapati'
+    };
+
     try {
-      setDoc(doc(db, 'users', 'NWCQo54XhPZUM9C3AZp1Zw802'), PRIMARY_ADMIN_PROFILE, { merge: true }).catch(() => {});
+      setDoc(doc(db, 'users', targetUid), adminUserDoc, { merge: true }).catch(() => {});
+      setDoc(doc(db, 'users', 'NWCQo54XhPZUM9C3AZp1Zw802'), adminUserDoc, { merge: true }).catch(() => {});
     } catch (e) {}
   }
 
