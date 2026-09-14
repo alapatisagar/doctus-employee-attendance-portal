@@ -372,6 +372,63 @@ class DatabaseService {
     return emp;
   }
 
+  async deleteEmployee(employeeId: string, actorName: string = 'Admin'): Promise<boolean> {
+    const cleanId = (employeeId || '').trim();
+    const emp = await this.getEmployeeById(cleanId);
+    if (!emp) throw new Error('Employee account not found.');
+
+    const cleanEmail = (emp.email || '').trim().toLowerCase();
+    const cleanUid = (emp.firebaseUid || '').trim().toLowerCase();
+    const isPrimaryAdmin = cleanEmail === 'sagarlapati3695@gmail.com' || cleanUid.includes('nwccqo54') || cleanUid.includes('nwcqo54') || emp.employeeId === 'DBS-540';
+
+    if (isPrimaryAdmin) {
+      throw new Error('Action blocked: The primary System Administrator account cannot be deleted.');
+    }
+
+    // 1. Remove from local memory & localStorage
+    this.employees = this.employees.filter(e => e.employeeId !== emp.employeeId && e.id !== emp.id);
+    setStored(STORAGE_KEYS.EMPLOYEES, this.employees);
+
+    // 2. Delete from Cloud Firestore collections
+    try {
+      await deleteDoc(doc(db, 'employees', emp.employeeId));
+      if (emp.firebaseUid) {
+        await deleteDoc(doc(db, 'users', emp.firebaseUid));
+      }
+    } catch (e) {
+      console.warn('[FIRESTORE DELETE WARNING]', e);
+    }
+
+    // 3. Log Audit
+    await this.logAudit({
+      actorId: 'ADMIN',
+      actorName,
+      actorRole: 'admin',
+      action: 'DELETE_EMPLOYEE' as any,
+      targetId: emp.employeeId,
+      targetName: emp.name,
+      details: `Permanently deleted employee profile for ${emp.name} (${emp.employeeId}).`
+    });
+
+    return true;
+  }
+
+  async deleteEmployeesBulk(employeeIds: string[], actorName: string = 'Admin'): Promise<{ successCount: number; errors: string[] }> {
+    let successCount = 0;
+    const errors: string[] = [];
+
+    for (const id of employeeIds) {
+      try {
+        await this.deleteEmployee(id, actorName);
+        successCount++;
+      } catch (err: any) {
+        errors.push(err.message || `Failed to delete ${id}`);
+      }
+    }
+
+    return { successCount, errors };
+  }
+
   async resendInvitation(employeeId: string, actorName: string = 'Admin'): Promise<Employee> {
     const emp = await this.getEmployeeById(employeeId);
     if (!emp) throw new Error('Employee not found');

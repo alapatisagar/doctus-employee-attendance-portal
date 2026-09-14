@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Search, Mail, RefreshCw, ShieldAlert, CheckCircle, Ban, Edit, Copy } from 'lucide-react';
+import { UserPlus, Search, Mail, RefreshCw, Trash2, Copy, AlertTriangle } from 'lucide-react';
 import { GlassCard } from '../common/GlassCard';
 import { Badge } from '../common/Badge';
 import { dbService } from '../../services/db';
@@ -15,6 +15,14 @@ export const EmployeeManagement: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [activeInviteModal, setActiveInviteModal] = useState<{ emp: Employee; link: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  
+  // Deletion state
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    targets: Employee[];
+  }>({ isOpen: false, targets: [] });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadEmployees();
@@ -23,6 +31,13 @@ export const EmployeeManagement: React.FC = () => {
   const loadEmployees = async () => {
     const list = await dbService.getEmployees();
     setEmployees(list);
+    setSelectedIds([]);
+  };
+
+  const isPrimaryAdmin = (emp: Employee) => {
+    const email = (emp.email || '').toLowerCase();
+    const uid = (emp.firebaseUid || '').toLowerCase();
+    return email === 'sagarlapati3695@gmail.com' || uid.includes('nwccqo54') || uid.includes('nwcqo54') || emp.employeeId === 'DBS-540';
   };
 
   const handleResendInvite = async (emp: Employee) => {
@@ -44,6 +59,40 @@ export const EmployeeManagement: React.FC = () => {
     }
   };
 
+  const promptSingleDelete = (emp: Employee) => {
+    if (isPrimaryAdmin(emp)) {
+      alert('Action blocked: The primary System Administrator account cannot be deleted.');
+      return;
+    }
+    setDeleteModalState({ isOpen: true, targets: [emp] });
+  };
+
+  const promptBulkDelete = () => {
+    const targets = employees.filter(e => selectedIds.includes(e.employeeId) && !isPrimaryAdmin(e));
+    if (targets.length === 0) {
+      alert('No deletable employees selected.');
+      return;
+    }
+    setDeleteModalState({ isOpen: true, targets });
+  };
+
+  const confirmDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const ids = deleteModalState.targets.map(t => t.employeeId);
+      const res = await dbService.deleteEmployeesBulk(ids, currentUser?.name || 'HR Admin');
+      if (res.errors.length > 0) {
+        alert(`Deletion finished with messages:\n${res.errors.join('\n')}`);
+      }
+      setDeleteModalState({ isOpen: false, targets: [] });
+      await loadEmployees();
+    } catch (e: any) {
+      alert(e.message || 'Failed to delete employee account(s).');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const filteredEmployees = employees.filter(e => {
     const matchesSearch = e.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           e.employeeId.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -51,6 +100,23 @@ export const EmployeeManagement: React.FC = () => {
     const matchesStatus = statusFilter === 'ALL' || e.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const deletableFiltered = filteredEmployees.filter(e => !isPrimaryAdmin(e));
+  const isAllSelected = deletableFiltered.length > 0 && deletableFiltered.every(e => selectedIds.includes(e.employeeId));
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(deletableFiltered.map(e => e.employeeId));
+    }
+  };
+
+  const toggleSelectRow = (employeeId: string) => {
+    setSelectedIds(prev => 
+      prev.includes(employeeId) ? prev.filter(id => id !== employeeId) : [...prev, employeeId]
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -63,17 +129,29 @@ export const EmployeeManagement: React.FC = () => {
               Employee Directory & HR Account Provisioning
             </h2>
             <p className="text-xs text-neutral-500">
-              Manage organization accounts, invitation statuses, roles, and access controls.
+              Manage organization accounts, invitation statuses, deletion controls, and access rights.
             </p>
           </div>
 
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-doctus-yellow to-doctus-yellow-600 font-extrabold text-xs text-neutral-950 shadow-md hover:shadow-glow-yellow flex items-center gap-2"
-          >
-            <UserPlus className="w-4 h-4 text-doctus-red" />
-            <span>Add New Employee</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {selectedIds.length > 0 && (
+              <button
+                onClick={promptBulkDelete}
+                className="px-3 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-md flex items-center gap-1.5 animate-pulse"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Selected ({selectedIds.length})</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-doctus-yellow to-doctus-yellow-600 font-extrabold text-xs text-neutral-950 shadow-md hover:shadow-glow-yellow flex items-center gap-2"
+            >
+              <UserPlus className="w-4 h-4 text-doctus-red" />
+              <span>Add New Employee</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter Toolbar */}
@@ -107,6 +185,15 @@ export const EmployeeManagement: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead className="bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 font-extrabold uppercase tracking-wider">
               <tr>
+                <th className="py-3 px-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={toggleSelectAll}
+                    disabled={deletableFiltered.length === 0}
+                    className="rounded border-neutral-300 text-doctus-red focus:ring-doctus-red"
+                  />
+                </th>
                 <th className="py-3 px-4">Employee ID</th>
                 <th className="py-3 px-4">Employee Name</th>
                 <th className="py-3 px-4">Department & Team</th>
@@ -117,54 +204,81 @@ export const EmployeeManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800 font-medium">
-              {filteredEmployees.map(emp => (
-                <tr key={emp.id} className="hover:bg-doctus-yellow/10 dark:hover:bg-neutral-800/40 transition-colors">
-                  <td className="py-3 px-4 font-mono font-bold text-doctus-red">{emp.employeeId}</td>
-                  <td className="py-3 px-4 font-bold text-neutral-950 dark:text-white">
-                    <div>{emp.name}</div>
-                    <div className="text-[10px] font-normal text-neutral-500">{emp.email}</div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <div>{emp.departmentName}</div>
-                    <div className="text-[10px] text-neutral-500">{emp.teamName}</div>
-                  </td>
-                  <td className="py-3 px-4 uppercase font-bold text-xs">{emp.role}</td>
-                  <td className="py-3 px-4"><Badge status={emp.status} size="sm" /></td>
-                  <td className="py-3 px-4 text-[10px] text-neutral-400">
-                    {emp.lastLoginAt ? new Date(emp.lastLoginAt).toLocaleDateString() : 'Never'}
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      {emp.status === 'INVITED' && (
-                        <button
-                          onClick={() => handleResendInvite(emp)}
-                          className="px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-300 font-bold text-[11px] hover:bg-indigo-200 flex items-center gap-1"
-                          title="Resend Activation Invitation Link"
-                        >
-                          <RefreshCw className="w-3 h-3" />
-                          <span>Resend Link</span>
-                        </button>
-                      )}
+              {filteredEmployees.map(emp => {
+                const isAdmin = isPrimaryAdmin(emp);
+                const isSelected = selectedIds.includes(emp.employeeId);
+                return (
+                  <tr key={emp.id} className={`hover:bg-doctus-yellow/10 dark:hover:bg-neutral-800/40 transition-colors ${isSelected ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
+                    <td className="py-3 px-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectRow(emp.employeeId)}
+                        disabled={isAdmin}
+                        className="rounded border-neutral-300 text-doctus-red focus:ring-doctus-red disabled:opacity-30"
+                      />
+                    </td>
+                    <td className="py-3 px-4 font-mono font-bold text-doctus-red">{emp.employeeId}</td>
+                    <td className="py-3 px-4 font-bold text-neutral-950 dark:text-white">
+                      <div>{emp.name}</div>
+                      <div className="text-[10px] font-normal text-neutral-500">{emp.email}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div>{emp.departmentName}</div>
+                      <div className="text-[10px] text-neutral-500">{emp.teamName}</div>
+                    </td>
+                    <td className="py-3 px-4 uppercase font-bold text-xs">{emp.role}</td>
+                    <td className="py-3 px-4"><Badge status={emp.status} size="sm" /></td>
+                    <td className="py-3 px-4 text-[10px] text-neutral-400">
+                      {emp.lastLoginAt ? new Date(emp.lastLoginAt).toLocaleDateString() : 'Never'}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {emp.status === 'INVITED' && (
+                          <button
+                            onClick={() => handleResendInvite(emp)}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-300 font-bold text-[11px] hover:bg-indigo-200 flex items-center gap-1"
+                            title="Resend Activation Invitation Link"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            <span>Resend Link</span>
+                          </button>
+                        )}
 
-                      {emp.status === 'ACTIVE' ? (
-                        <button
-                          onClick={() => handleStatusChange(emp, 'SUSPENDED')}
-                          className="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 font-bold text-[11px] hover:bg-amber-200"
-                        >
-                          Suspend
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleStatusChange(emp, 'ACTIVE')}
-                          className="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-bold text-[11px] hover:bg-emerald-200"
-                        >
-                          Activate
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {emp.status === 'ACTIVE' ? (
+                          <button
+                            onClick={() => handleStatusChange(emp, 'SUSPENDED')}
+                            className="px-2 py-1 rounded-lg bg-amber-100 text-amber-900 font-bold text-[11px] hover:bg-amber-200"
+                          >
+                            Suspend
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleStatusChange(emp, 'ACTIVE')}
+                            className="px-2 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-bold text-[11px] hover:bg-emerald-200"
+                          >
+                            Activate
+                          </button>
+                        )}
+
+                        {!isAdmin ? (
+                          <button
+                            onClick={() => promptSingleDelete(emp)}
+                            className="p-1 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-950/60 dark:text-red-300 font-bold transition-colors"
+                            title="Delete Employee Profile"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-neutral-400 font-bold px-1" title="Protected System Admin">
+                            Protected
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -176,6 +290,68 @@ export const EmployeeManagement: React.FC = () => {
         onClose={() => setIsAddModalOpen(false)}
         onSuccess={loadEmployees}
       />
+
+      {/* Delete Employee Confirmation Modal */}
+      {deleteModalState.isOpen && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-xs">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl p-6 max-w-md w-full border border-red-200 dark:border-red-900 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
+              <div className="p-3 rounded-full bg-red-100 dark:bg-red-950/60">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base text-neutral-950 dark:text-white">
+                  Confirm Permanent Deletion
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  {deleteModalState.targets.length === 1 
+                    ? `Delete employee account: ${deleteModalState.targets[0].name}?`
+                    : `Delete ${deleteModalState.targets.length} selected employee accounts?`}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-xs text-neutral-700 dark:text-neutral-300 space-y-1">
+              <p className="font-bold">The following employee account(s) will be removed:</p>
+              <ul className="max-h-32 overflow-y-auto list-disc pl-4 space-y-0.5 font-mono text-[11px] text-red-700 dark:text-red-400">
+                {deleteModalState.targets.map(t => (
+                  <li key={t.employeeId}>{t.name} ({t.employeeId}) — {t.email}</li>
+                ))}
+              </ul>
+              <p className="text-[11px] text-neutral-500 pt-1">
+                ⚠️ This will purge access rights and remove their profile. Historical audit logs will remain intact.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                disabled={isDeleting}
+                onClick={() => setDeleteModalState({ isOpen: false, targets: [] })}
+                className="px-4 py-2 rounded-xl border text-xs font-bold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isDeleting}
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-md flex items-center gap-1.5"
+              >
+                {isDeleting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Resend Link Modal */}
       {activeInviteModal && (
