@@ -512,17 +512,33 @@ class DatabaseService {
   async addEmployee(employeeData: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>, actorName: string = 'HR Admin'): Promise<Employee> {
     const now = new Date().toISOString();
     const newId = `emp-${Date.now()}`;
-    const token = `ACTIVATE-DOCTUS-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const cleanId = (employeeData.employeeId || '').trim();
+    const targetStatus = employeeData.status || 'ACTIVE';
+    const isDirectActive = targetStatus === 'ACTIVE';
+
+    const cleanEmail = employeeData.email && employeeData.email.trim()
+      ? employeeData.email.trim().toLowerCase()
+      : `${cleanId.toLowerCase()}@doctus.internal`;
+
+    const cleanPhone = employeeData.phone && employeeData.phone.trim()
+      ? employeeData.phone.trim()
+      : '-';
+
+    const token = !isDirectActive ? `ACTIVATE-DOCTUS-${Math.random().toString(36).substring(2, 9).toUpperCase()}` : undefined;
+    const expiresAt = !isDirectActive ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : undefined;
 
     const newEmployee: Employee = {
       ...employeeData,
       id: newId,
-      status: 'INVITED',
-      firebaseUid: null,
+      employeeId: cleanId,
+      email: cleanEmail,
+      phone: cleanPhone,
+      status: targetStatus,
+      firebaseUid: isDirectActive ? `usr-${cleanId}` : null,
       activationToken: token,
       activationExpiresAt: expiresAt,
-      invitedAt: now,
+      invitedAt: !isDirectActive ? now : undefined,
+      activatedAt: isDirectActive ? now : undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -532,6 +548,18 @@ class DatabaseService {
 
     try {
       setDoc(doc(db, 'employees', newEmployee.employeeId), newEmployee, { merge: true }).catch(() => {});
+      if (isDirectActive) {
+        const userDoc: UserAccount = {
+          firebaseUid: newEmployee.firebaseUid!,
+          email: newEmployee.email,
+          role: newEmployee.role,
+          status: 'ACTIVE',
+          accountType: newEmployee.role === 'admin' || newEmployee.role === 'hr' ? 'MANAGEMENT' : 'EMPLOYEE',
+          employeeId: newEmployee.employeeId,
+          name: newEmployee.name
+        };
+        setDoc(doc(db, 'users', userDoc.firebaseUid), userDoc, { merge: true }).catch(() => {});
+      }
     } catch (e) {}
 
     this.balances[newEmployee.employeeId] = {
@@ -551,7 +579,7 @@ class DatabaseService {
       action: 'CREATE_EMPLOYEE',
       targetId: newEmployee.employeeId,
       targetName: newEmployee.name,
-      details: `Created employee ${newEmployee.name} (${newEmployee.employeeId}) in ${newEmployee.departmentName}. Status: INVITED. Invitation link generated.`
+      details: `Created employee ${newEmployee.name} (${newEmployee.employeeId}) in ${newEmployee.departmentName}. Status: ${targetStatus}.`
     });
 
     return newEmployee;
