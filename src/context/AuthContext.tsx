@@ -136,8 +136,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const profilePromise = (async () => {
           let resolved = await dbService.getEmployeeByFirebaseUidOrEmail(fbUid || '', cleanEmail);
-          if (!resolved && (cleanEmail === 'sagarlapati3695@gmail.com' || fbUid === 'NWCQo54XhPZUM9C3AZp1Zw802')) {
-            resolved = await dbService.getEmployeeByFirebaseUidOrEmail('NWCQo54XhPZUM9C3AZp1Zw802', 'sagarlapati3695@gmail.com');
+          const isPrimaryAdmin = cleanEmail === 'sagarlapati3695@gmail.com' || (fbUid && (fbUid.toLowerCase().includes('nwccqo54') || fbUid.toLowerCase().includes('nwcqo54')));
+          if (!resolved && isPrimaryAdmin) {
+            resolved = await dbService.getEmployeeByFirebaseUidOrEmail(fbUid || 'NWcCQo54XhPZUMu9C3AzppIZw802', 'sagarlapati3695@gmail.com');
           }
           return resolved;
         })();
@@ -147,8 +148,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           new Promise<Employee | undefined>((resolve) => 
             setTimeout(async () => {
               console.warn('[AUTH TRACE] Bounded login profile resolution timeout. Using admin fallback.');
-              if (cleanEmail === 'sagarlapati3695@gmail.com' || fbUid === 'NWCQo54XhPZUM9C3AZp1Zw802') {
-                const fallbackAdmin = await dbService.getEmployeeByFirebaseUidOrEmail('NWCQo54XhPZUM9C3AZp1Zw802', 'sagarlapati3695@gmail.com');
+              const isPrimaryAdmin = cleanEmail === 'sagarlapati3695@gmail.com' || (fbUid && (fbUid.toLowerCase().includes('nwccqo54') || fbUid.toLowerCase().includes('nwcqo54')));
+              if (isPrimaryAdmin) {
+                const fallbackAdmin = await dbService.getEmployeeByFirebaseUidOrEmail(fbUid || 'NWcCQo54XhPZUMu9C3AzppIZw802', 'sagarlapati3695@gmail.com');
                 resolve(fallbackAdmin);
               } else {
                 resolve(undefined);

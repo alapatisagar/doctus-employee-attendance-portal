@@ -35,12 +35,12 @@ export const INITIAL_SETTINGS: SystemSettings = {
 export const INITIAL_EMPLOYEES: Employee[] = [
   {
     id: 'emp-admin-1',
-    employeeId: 'ADMIN1001',
+    employeeId: 'DBS-540',
     firstName: 'Sagar',
-    lastName: 'Lapati',
-    name: 'Sagar Lapati',
+    lastName: 'Alapati',
+    name: 'Sagar Alapati',
     email: 'sagarlapati3695@gmail.com',
-    firebaseUid: 'NWCQo54XhPZUM9C3AZp1Zw802',
+    firebaseUid: 'NWcCQo54XhPZUMu9C3AzppIZw802',
     phone: '+91 98765 43210',
     joiningDate: '2020-01-15',
     designation: 'VP of Human Resources & Admin',
