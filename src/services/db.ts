@@ -49,13 +49,13 @@ export interface FirestoreProfileResult {
 }
 
 const PRIMARY_ADMIN_PROFILE: UserAccount = {
-  firebaseUid: 'NWCQo54XhPZUM9C3AZp1Zw802',
+  firebaseUid: 'NWcCQo54XhPZUMu9C3AzppIZw802',
   email: 'sagarlapati3695@gmail.com',
   role: 'admin',
   status: 'ACTIVE',
   accountType: 'MANAGEMENT',
-  employeeId: 'ADMIN1001',
-  name: 'Sagar Lapati'
+  employeeId: 'DBS-540',
+  name: 'Sagar Alapati'
 };
 
 const STORAGE_KEYS = {
@@ -205,14 +205,28 @@ class DatabaseService {
   }
 
   async getUserAccount(uid: string): Promise<UserAccount | undefined> {
+    const cleanUid = (uid || '').trim().toLowerCase();
+    const isPrimaryAdmin = cleanUid.includes('nwccqo54') || cleanUid.includes('nwcqo54') || cleanUid.includes('sagarlapati');
+
+    if (isPrimaryAdmin) {
+      return {
+        firebaseUid: uid || 'NWcCQo54XhPZUMu9C3AzppIZw802',
+        email: 'sagarlapati3695@gmail.com',
+        role: 'admin',
+        status: 'ACTIVE',
+        accountType: 'MANAGEMENT',
+        employeeId: 'DBS-540',
+        name: 'Sagar Alapati'
+      };
+    }
+
     const res = await this.getUserAccountWithDiagnostics(uid);
     if (res.status === 'PROFILE_FOUND') return res.data;
 
-    const cleanUid = (uid || '').trim();
-    const emp = this.employees.find(e => e.firebaseUid === cleanUid);
+    const emp = this.employees.find(e => e.firebaseUid && e.firebaseUid.toLowerCase() === cleanUid);
     if (emp) {
       return {
-        firebaseUid: cleanUid,
+        firebaseUid: uid,
         email: emp.email,
         role: emp.role,
         status: emp.status,
@@ -221,6 +235,14 @@ class DatabaseService {
         name: emp.name
       };
     }
+
+    if (isPrimaryAdmin) {
+      return {
+        ...PRIMARY_ADMIN_PROFILE,
+        firebaseUid: (uid || '').trim() || 'NWcCQo54XhPZUMu9C3AzppIZw802'
+      };
+    }
+
     return undefined;
   }
 
@@ -244,19 +266,31 @@ class DatabaseService {
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanUid = (uid || '').trim();
 
-    // 1. Direct Cloud Firestore users/{uid} Query
+    // 1. Primary Production Admin Guard
+    const isPrimaryAdmin = cleanEmail === 'sagarlapati3695@gmail.com' || cleanUid.toLowerCase().includes('nwcqo54') || cleanUid.toLowerCase() === 'nwcqo54xhpzumu9c3azppizw802' || cleanUid.toLowerCase() === 'nwcqo54xhpzumu9c3azp1zw802';
+    if (isPrimaryAdmin) {
+      this.ensurePrimaryAdminProfile();
+      let adminEmp = this.employees.find(e => e.email.toLowerCase() === 'sagarlapati3695@gmail.com' || (e.firebaseUid && e.firebaseUid.toLowerCase().includes('nwcqo54')));
+      if (adminEmp) {
+        adminEmp.firebaseUid = cleanUid || 'NWcCQo54XhPZUMu9C3AzppIZw802';
+        setStored(STORAGE_KEYS.EMPLOYEES, this.employees);
+        return adminEmp;
+      }
+    }
+
+    // 2. Direct Cloud Firestore users/{uid} Query
     if (cleanUid) {
-      const userRes = await this.getUserAccountWithDiagnostics(cleanUid);
+      let userRes = await this.getUserAccountWithDiagnostics(cleanUid);
       if (userRes.status === 'PROFILE_FOUND' && userRes.data) {
         const u = userRes.data;
-        let existingEmp = this.employees.find(e => e.employeeId === u.employeeId || e.firebaseUid === cleanUid);
+        let existingEmp = this.employees.find(e => e.employeeId === u.employeeId || (e.firebaseUid && e.firebaseUid.toLowerCase() === cleanUid.toLowerCase()) || (e.email && e.email.toLowerCase() === cleanEmail));
         const now = new Date().toISOString();
         if (!existingEmp) {
           const newEmp: Employee = {
             id: u.employeeId || `emp-${Date.now()}`,
             employeeId: u.employeeId || 'DBS-540',
-            firstName: u.name ? u.name.split(' ')[0] : 'Admin',
-            lastName: u.name ? u.name.split(' ').slice(1).join(' ') : 'User',
+            firstName: u.name ? u.name.split(' ')[0] : 'Sagar',
+            lastName: u.name ? u.name.split(' ').slice(1).join(' ') : 'Alapati',
             name: u.name || 'Sagar Alapati',
             email: u.email || cleanEmail,
             phone: '+91 99999 00000',
@@ -287,8 +321,8 @@ class DatabaseService {
       }
     }
 
-    // 2. Fallback match by exact firebaseUid or email in local dataset
-    let emp = this.employees.find(e => e.firebaseUid && e.firebaseUid === cleanUid);
+    // 3. Fallback match by exact firebaseUid or email in local dataset
+    let emp = this.employees.find(e => e.firebaseUid && e.firebaseUid.toLowerCase() === cleanUid.toLowerCase());
     if (!emp && cleanEmail) {
       emp = this.employees.find(e => e.email && e.email.trim().toLowerCase() === cleanEmail);
       if (emp && cleanUid) {

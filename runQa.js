@@ -14,7 +14,7 @@ async function run() {
     // -----------------------------------------------------------------
     console.log('--- TEST 1 & 2: Primary Admin (sagarlapati3695@gmail.com) Auth & Firestore User Profile ---');
     const adminEmail = 'sagarlapati3695@gmail.com';
-    const adminUid = 'NWCQo54XhPZUM9C3AZp1Zw802';
+    const adminUid = 'NWcCQo54XhPZUMu9C3AzppIZw802';
 
     const userAccount = await dbService.getUserAccount(adminUid);
     const adminEmp = await dbService.getEmployeeByFirebaseUidOrEmail(adminUid, adminEmail);
