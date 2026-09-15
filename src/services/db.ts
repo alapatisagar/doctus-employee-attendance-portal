@@ -120,6 +120,43 @@ class DatabaseService {
 
     this.syncSeedEmployees();
     this.ensurePrimaryAdminProfile();
+    this.deduplicateEmployees();
+  }
+
+  private deduplicateEmployees(): void {
+    const seenIds = new Set<string>();
+    const seenEmails = new Set<string>();
+    const uniqueList: Employee[] = [];
+
+    for (const emp of this.employees) {
+      const cleanEmpId = (emp.employeeId || emp.id || '').trim().toUpperCase();
+      const cleanEmail = (emp.email || '').trim().toLowerCase();
+
+      const isPrimaryAdmin = cleanEmail === 'sagarlapati3695@gmail.com' || cleanEmpId === 'DBS-540' || (emp.firebaseUid && emp.firebaseUid.toLowerCase().includes('nwcqo54'));
+
+      if (isPrimaryAdmin) {
+        if (!seenIds.has('DBS-540') && !seenEmails.has('sagarlapati3695@gmail.com')) {
+          seenIds.add('DBS-540');
+          seenEmails.add('sagarlapati3695@gmail.com');
+          uniqueList.push(emp);
+        }
+        continue;
+      }
+
+      if (cleanEmpId && seenIds.has(cleanEmpId)) {
+        continue;
+      }
+      if (cleanEmail && cleanEmail !== '-' && !cleanEmail.includes('@doctus.internal') && seenEmails.has(cleanEmail)) {
+        continue;
+      }
+
+      if (cleanEmpId) seenIds.add(cleanEmpId);
+      if (cleanEmail) seenEmails.add(cleanEmail);
+      uniqueList.push(emp);
+    }
+
+    this.employees = uniqueList;
+    setStored(STORAGE_KEYS.EMPLOYEES, this.employees);
   }
 
   private syncSeedEmployees(): void {
@@ -279,6 +316,7 @@ class DatabaseService {
 
   // --- EMPLOYEES & ACCOUNT RESOLUTION ---
   async getEmployees(): Promise<Employee[]> {
+    this.deduplicateEmployees();
     return [...this.employees];
   }
 
