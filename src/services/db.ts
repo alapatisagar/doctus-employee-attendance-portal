@@ -848,10 +848,40 @@ class DatabaseService {
     return record;
   }
 
-  async bulkMarkAttendance(updates: any, actorName: string = 'Admin', ...rest: any[]): Promise<void> {
-    if (Array.isArray(updates)) {
-      for (const item of updates) {
-        await this.markAttendanceStatus(item.employeeId, item.date, item.status, undefined, 'Bulk update', 'ADMIN', actorName, 'admin');
+  async bulkMarkAttendance(
+    employeeIdsOrUpdates: any,
+    dateOrActorName?: any,
+    targetStatus?: AttendanceStatus,
+    reason?: string,
+    actorId?: string,
+    actorName?: string,
+    actorRole?: UserRole
+  ): Promise<void> {
+    if (Array.isArray(employeeIdsOrUpdates)) {
+      for (const item of employeeIdsOrUpdates) {
+        if (typeof item === 'string') {
+          await this.markAttendanceStatus(
+            item,
+            dateOrActorName as string,
+            targetStatus!,
+            undefined,
+            reason || 'Bulk attendance update',
+            actorId || 'ADMIN',
+            actorName || 'Admin',
+            actorRole || 'admin'
+          );
+        } else if (item && typeof item === 'object' && item.employeeId) {
+          await this.markAttendanceStatus(
+            item.employeeId,
+            item.date || (typeof dateOrActorName === 'string' ? dateOrActorName : new Date().toISOString().split('T')[0]),
+            item.status || targetStatus || 'PRESENT',
+            undefined,
+            reason || 'Bulk attendance update',
+            actorId || 'ADMIN',
+            actorName || (typeof dateOrActorName === 'string' && !dateOrActorName.includes('-') ? dateOrActorName : 'Admin'),
+            actorRole || 'admin'
+          );
+        }
       }
     }
   }
@@ -865,8 +895,8 @@ class DatabaseService {
     actorId?: string,
     actorName?: string,
     actorRole?: UserRole,
-    arg9?: any,
-    arg10?: any
+    customCheckIn?: string,
+    customCheckOut?: string
   ): Promise<AttendanceRecord> {
     if (actorRole === 'employee') {
       throw new Error('Employees are strictly forbidden from modifying attendance records. Contact your Team Lead, Manager, or HR.');
@@ -893,6 +923,9 @@ class DatabaseService {
         status: newStatus,
         halfDaySession: session || this.attendance[recordIndex].halfDaySession,
         attendanceSource: source,
+        checkIn: customCheckIn || this.attendance[recordIndex].checkIn || (newStatus === 'PRESENT' || newStatus === 'HALF_DAY' || newStatus === 'LATE' || newStatus === 'WFH' ? timeStr : undefined),
+        checkOut: customCheckOut || this.attendance[recordIndex].checkOut,
+        workingMinutes: newStatus === 'HALF_DAY' ? 240 : (newStatus === 'ABSENT' || newStatus === 'LEAVE' ? 0 : 540),
         createdAt: this.attendance[recordIndex].createdAt || now.toISOString(),
         updatedAt: now.toISOString()
       };
@@ -916,8 +949,9 @@ class DatabaseService {
         departmentId: emp.departmentId,
         teamId: emp.teamId,
         date,
-        checkIn: timeStr,
-        workingMinutes: newStatus === 'HALF_DAY' ? 240 : 540,
+        checkIn: customCheckIn || (newStatus === 'ABSENT' || newStatus === 'LEAVE' ? undefined : timeStr),
+        checkOut: customCheckOut,
+        workingMinutes: newStatus === 'HALF_DAY' ? 240 : (newStatus === 'ABSENT' || newStatus === 'LEAVE' ? 0 : 540),
         status: newStatus,
         halfDaySession: session,
         workMode: 'OFFICE',

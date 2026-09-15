@@ -126,8 +126,25 @@ async function run() {
     if (!auditEntry) throw new Error('FAIL: Audit log missing');
     console.log('✅ TEST 12-15 PASSED: Admin management override & immutable audit trail verified!\n');
 
+    // -----------------------------------------------------------------
+    // TEST 16: Bulk Attendance Marking Verification
+    // -----------------------------------------------------------------
+    console.log('--- TEST 16: Bulk Attendance Marking Verification ---');
+    const bulkEmpIds = ['DBS001', 'DBS002', 'QA-PROD-005'];
+    await dbService.bulkMarkAttendance(bulkEmpIds, dateToday, 'PRESENT', 'Bulk verified by Admin', adminUid, 'Sagar Lapati (Admin)', 'admin');
+    
+    const recordsAfterBulk = await dbService.getAttendanceRecords(undefined, dateToday.substring(0, 7));
+    const markedRecords = recordsAfterBulk.filter(r => r.date === dateToday && bulkEmpIds.includes(r.employeeId));
+    console.log(`-> Bulk marked ${markedRecords.length} records out of ${bulkEmpIds.length} requested.`);
+    for (const r of markedRecords) {
+      console.log(`   * Employee ${r.employeeId} (${r.employeeName}): ${r.status}`);
+      if (r.status !== 'PRESENT') throw new Error(`FAIL: Employee ${r.employeeId} status is ${r.status}, expected PRESENT`);
+    }
+    if (markedRecords.length !== bulkEmpIds.length) throw new Error('FAIL: Bulk mark count mismatch');
+    console.log('✅ TEST 16 PASSED: Bulk attendance marking for multiple employees executed successfully!\n');
+
     console.log('=====================================================================');
-    console.log('🎉 ALL 15 CLOUD FIRESTORE PRODUCTION QA TESTS PASSED 100%!');
+    console.log('🎉 ALL 16 CLOUD FIRESTORE PRODUCTION QA TESTS PASSED 100%!');
     console.log('=====================================================================\n');
     process.exit(0);
   } catch (err) {
