@@ -41,6 +41,7 @@ export const AttendanceManagement: React.FC = () => {
   // Bulk Selection
   const [selectedEmpIds, setSelectedEmpIds] = useState<string[]>([]);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [autoMarkRemainingPresent, setAutoMarkRemainingPresent] = useState(true);
 
   useEffect(() => {
     loadData();
@@ -122,6 +123,7 @@ export const AttendanceManagement: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      // 1. Bulk update selected employees
       await dbService.bulkMarkAttendance(
         selectedEmpIds,
         selectedDate,
@@ -131,6 +133,25 @@ export const AttendanceManagement: React.FC = () => {
         currentUser.name,
         activeRole
       );
+
+      // 2. Auto-mark remaining unselected employees as PRESENT if option is enabled
+      if (autoMarkRemainingPresent) {
+        const remainingEmpIds = employees
+          .map(e => e.employeeId)
+          .filter(id => !selectedEmpIds.includes(id));
+
+        if (remainingEmpIds.length > 0) {
+          await dbService.bulkMarkAttendance(
+            remainingEmpIds,
+            selectedDate,
+            'PRESENT',
+            'Auto-marked PRESENT for remaining employees',
+            currentUser.employeeId,
+            currentUser.name,
+            activeRole
+          );
+        }
+      }
 
       confetti({ particleCount: 60, spread: 50 });
       setIsBulkModalOpen(false);
@@ -326,6 +347,14 @@ export const AttendanceManagement: React.FC = () => {
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
+                          onClick={() => handleOpenModifyModal(emp, st === 'NOT_MARKED' ? 'PRESENT' : st)}
+                          title="Edit attendance record anytime"
+                          className="px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 text-[10px] font-extrabold hover:bg-neutral-200 dark:hover:bg-neutral-700 flex items-center gap-1 border border-neutral-300 dark:border-neutral-700"
+                        >
+                          <Edit3 className="w-3 h-3 text-doctus-red" />
+                          Edit
+                        </button>
+                        <button
                           onClick={() => handleOpenModifyModal(emp, 'PRESENT')}
                           className="px-2 py-1 rounded bg-emerald-100 text-emerald-900 text-[10px] font-bold hover:bg-emerald-200"
                         >
@@ -498,6 +527,20 @@ export const AttendanceManagement: React.FC = () => {
                 <option value="LEAVE">MARK LEAVE</option>
               </select>
             </div>
+            {/* Auto-mark remaining employees option */}
+            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 flex items-start gap-2.5 text-xs">
+              <input
+                type="checkbox"
+                id="autoMarkPresent"
+                checked={autoMarkRemainingPresent}
+                onChange={(e) => setAutoMarkRemainingPresent(e.target.checked)}
+                className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              />
+              <label htmlFor="autoMarkPresent" className="font-bold text-emerald-900 dark:text-emerald-200 cursor-pointer leading-tight">
+                Automatically mark all remaining unselected employees ({Math.max(0, employees.length - selectedEmpIds.length)}) as <strong className="text-emerald-700 dark:text-emerald-400">PRESENT</strong> for {selectedDate}
+              </label>
+            </div>
+
             <div>
               <label className={`block text-xs font-bold mb-1 ${targetStatus === 'PRESENT' || targetStatus === 'ABSENT' ? 'text-neutral-700 dark:text-neutral-300' : 'text-doctus-red'}`}>
                 {targetStatus === 'PRESENT' || targetStatus === 'ABSENT' ? 'Reason (Optional)' : 'Reason * (Required)'}
