@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Search, Mail, RefreshCw, Trash2, Copy, AlertTriangle } from 'lucide-react';
+import { UserPlus, Search, Mail, RefreshCw, Trash2, Copy, AlertTriangle, Edit } from 'lucide-react';
 import { GlassCard } from '../common/GlassCard';
 import { Badge } from '../common/Badge';
 import { dbService } from '../../services/db';
 import { Employee, AccountStatus } from '../../types';
 import { AddEmployeeModal } from './AddEmployeeModal';
+import { EditEmployeeModal } from './EditEmployeeModal';
 import { useAuth } from '../../context/AuthContext';
 
 export const EmployeeManagement: React.FC = () => {
@@ -13,6 +14,7 @@ export const EmployeeManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [activeInviteModal, setActiveInviteModal] = useState<{ emp: Employee; link: string } | null>(null);
   const [copied, setCopied] = useState(false);
   
@@ -129,7 +131,7 @@ export const EmployeeManagement: React.FC = () => {
               Employee Directory & HR Account Provisioning
             </h2>
             <p className="text-xs text-neutral-500">
-              Manage organization accounts, invitation statuses, deletion controls, and access rights.
+              Manage organization accounts ({employees.length} employees), invitation statuses, deletion controls, and access rights.
             </p>
           </div>
 
@@ -160,7 +162,7 @@ export const EmployeeManagement: React.FC = () => {
             <Search className="w-4 h-4 absolute left-3 top-2.5 text-neutral-400" />
             <input
               type="text"
-              placeholder="Search by Employee Name, ID (e.g. DBS-1001), or Email..."
+              placeholder="Search by Employee Name, ID (e.g. DBS-25132), or Email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-2 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white"
@@ -172,7 +174,7 @@ export const EmployeeManagement: React.FC = () => {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-3 py-2 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white font-bold"
           >
-            <option value="ALL">All Account Statuses</option>
+            <option value="ALL">All Account Statuses ({employees.length})</option>
             <option value="ACTIVE">ACTIVE</option>
             <option value="INVITED">INVITED (Pending Activation)</option>
             <option value="SUSPENDED">SUSPENDED</option>
@@ -181,9 +183,9 @@ export const EmployeeManagement: React.FC = () => {
         </div>
 
         {/* Employees Table */}
-        <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-800">
+        <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-800 max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 font-extrabold uppercase tracking-wider">
+            <thead className="bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 font-extrabold uppercase tracking-wider sticky top-0 z-10">
               <tr>
                 <th className="py-3 px-3 w-10 text-center">
                   <input
@@ -194,12 +196,11 @@ export const EmployeeManagement: React.FC = () => {
                     className="rounded border-neutral-300 text-doctus-red focus:ring-doctus-red"
                   />
                 </th>
-                <th className="py-3 px-4">Employee ID</th>
+                <th className="py-3 px-4">DBS ID</th>
                 <th className="py-3 px-4">Employee Name</th>
                 <th className="py-3 px-4">Department & Team</th>
                 <th className="py-3 px-4">Role</th>
                 <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Last Login</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -229,11 +230,18 @@ export const EmployeeManagement: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 uppercase font-bold text-xs">{emp.role}</td>
                     <td className="py-3 px-4"><Badge status={emp.status} size="sm" /></td>
-                    <td className="py-3 px-4 text-[10px] text-neutral-400">
-                      {emp.lastLoginAt ? new Date(emp.lastLoginAt).toLocaleDateString() : 'Never'}
-                    </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {/* Edit Role & Details Button */}
+                        <button
+                          onClick={() => setEditingEmployee(emp)}
+                          className="px-2.5 py-1 rounded-lg bg-doctus-yellow/30 text-neutral-900 dark:text-white hover:bg-doctus-yellow font-bold text-[11px] flex items-center gap-1 transition-colors"
+                          title="Edit Names, DBS ID, Role & Access"
+                        >
+                          <Edit className="w-3 h-3" />
+                          <span>Edit</span>
+                        </button>
+
                         {emp.status === 'INVITED' && (
                           <button
                             onClick={() => handleResendInvite(emp)}
@@ -288,6 +296,14 @@ export const EmployeeManagement: React.FC = () => {
       <AddEmployeeModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
+        onSuccess={loadEmployees}
+      />
+
+      {/* Edit Employee Modal */}
+      <EditEmployeeModal
+        employee={editingEmployee}
+        isOpen={!!editingEmployee}
+        onClose={() => setEditingEmployee(null)}
         onSuccess={loadEmployees}
       />
 

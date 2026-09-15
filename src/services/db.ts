@@ -118,7 +118,25 @@ class DatabaseService {
     this.notifications = getStored(STORAGE_KEYS.NOTIFICATIONS, []);
     this.settings = getStored(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
 
+    this.syncSeedEmployees();
     this.ensurePrimaryAdminProfile();
+  }
+
+  private syncSeedEmployees(): void {
+    let updated = false;
+    INITIAL_EMPLOYEES.forEach(seedEmp => {
+      const exists = this.employees.some(e => 
+        e.employeeId === seedEmp.employeeId || 
+        e.name.toLowerCase() === seedEmp.name.toLowerCase()
+      );
+      if (!exists) {
+        this.employees.push(seedEmp);
+        updated = true;
+      }
+    });
+    if (updated) {
+      setStored(STORAGE_KEYS.EMPLOYEES, this.employees);
+    }
   }
 
   private ensurePrimaryAdminProfile(activeUid?: string): void {
