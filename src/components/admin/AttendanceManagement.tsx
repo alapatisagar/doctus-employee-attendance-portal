@@ -78,7 +78,8 @@ export const AttendanceManagement: React.FC = () => {
     e.preventDefault();
     if (!selectedEmp || !currentUser) return;
 
-    if (!mandatoryReason || !mandatoryReason.trim()) {
+    const isReasonRequired = targetStatus !== 'PRESENT' && targetStatus !== 'ABSENT';
+    if (isReasonRequired && (!mandatoryReason || !mandatoryReason.trim())) {
       setErrorMsg('A mandatory reason is required for manual attendance modification.');
       return;
     }
@@ -92,7 +93,7 @@ export const AttendanceManagement: React.FC = () => {
         selectedDate,
         targetStatus,
         targetStatus === 'HALF_DAY' ? halfDaySession : undefined,
-        mandatoryReason.trim(),
+        mandatoryReason ? mandatoryReason.trim() : undefined,
         currentUser.employeeId,
         currentUser.name,
         activeRole,
@@ -112,7 +113,9 @@ export const AttendanceManagement: React.FC = () => {
 
   const handleBulkSubmit = async () => {
     if (selectedEmpIds.length === 0 || !currentUser) return;
-    if (!mandatoryReason || !mandatoryReason.trim()) {
+
+    const isReasonRequired = targetStatus !== 'PRESENT' && targetStatus !== 'ABSENT';
+    if (isReasonRequired && (!mandatoryReason || !mandatoryReason.trim())) {
       setErrorMsg('A mandatory reason is required for bulk attendance updates.');
       return;
     }
@@ -123,7 +126,7 @@ export const AttendanceManagement: React.FC = () => {
         selectedEmpIds,
         selectedDate,
         targetStatus,
-        mandatoryReason.trim(),
+        mandatoryReason ? mandatoryReason.trim() : undefined,
         currentUser.employeeId,
         currentUser.name,
         activeRole
@@ -442,17 +445,17 @@ export const AttendanceManagement: React.FC = () => {
                 </div>
               )}
 
-              {/* Mandatory Reason */}
+              {/* Reason / Justification */}
               <div>
-                <label className="block font-extrabold text-doctus-red mb-1">
-                  Mandatory Reason / Justification * (Required)
+                <label className={`block font-extrabold mb-1 ${targetStatus === 'PRESENT' || targetStatus === 'ABSENT' ? 'text-neutral-700 dark:text-neutral-300' : 'text-doctus-red'}`}>
+                  {targetStatus === 'PRESENT' || targetStatus === 'ABSENT' ? 'Reason / Justification (Optional)' : 'Reason / Justification * (Required)'}
                 </label>
                 <textarea
                   rows={3}
                   value={mandatoryReason}
                   onChange={(e) => setMandatoryReason(e.target.value)}
-                  placeholder="Provide specific justification for this manual attendance change (e.g. Employee working on client site / TL verification)..."
-                  className="w-full px-3.5 py-2 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-doctus-red/40 text-xs font-medium"
+                  placeholder={targetStatus === 'PRESENT' || targetStatus === 'ABSENT' ? "Optional justification/notes for this update..." : "Provide specific justification for this manual attendance change..."}
+                  className={`w-full px-3.5 py-2 rounded-xl bg-neutral-50 dark:bg-neutral-800 border ${targetStatus === 'PRESENT' || targetStatus === 'ABSENT' ? 'border-neutral-300 dark:border-neutral-700' : 'border-doctus-red/40'} text-xs font-medium`}
                 ></textarea>
               </div>
 
@@ -496,12 +499,14 @@ export const AttendanceManagement: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-doctus-red mb-1">Mandatory Reason *</label>
+              <label className={`block text-xs font-bold mb-1 ${targetStatus === 'PRESENT' || targetStatus === 'ABSENT' ? 'text-neutral-700 dark:text-neutral-300' : 'text-doctus-red'}`}>
+                {targetStatus === 'PRESENT' || targetStatus === 'ABSENT' ? 'Reason (Optional)' : 'Reason * (Required)'}
+              </label>
               <textarea
                 rows={3}
                 value={mandatoryReason}
                 onChange={(e) => setMandatoryReason(e.target.value)}
-                placeholder="Reason for bulk attendance mark..."
+                placeholder={targetStatus === 'PRESENT' || targetStatus === 'ABSENT' ? "Optional reason for bulk mark..." : "Mandatory reason for bulk mark..."}
                 className="w-full px-3 py-2 rounded-xl border text-xs"
               ></textarea>
             </div>
